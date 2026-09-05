@@ -69,29 +69,53 @@ bool Shell::handle_builtin(const std::vector<std::string> &args) {
 }
 
 void Shell::execute(const std::vector<std::string> &args) {
+
+  // organize
+  std::vector<std::vector<char *>> cmds = tokenize_cmds(args);
+
+  for (size_t i = 0; i < cmds.size(); ++i) {
+    std::vector<char *> cmd = cmds[i];
+
+    bool is_last_cmd = i - 1 == cmds.size();
+
+    pid_t pid = fork();
+    if (pid < 0) {
+      perror("fork failed");
+      return;
+    }
+
+    if (pid == 0) {
+
+      if (!is_last_cmd) {
+        // figure out how to prompt ai to figure out smth like dup2 instead of
+        // just looking tho maybe straight up copying at this level is fine
+      }
+
+      execvp(cmd[0], cmd.data());
+      perror("execvp failed");
+      exit(1);
+    } else {
+      int status;
+      waitpid(pid, &status, 0);
+    }
+  }
+}
+
+std::vector<std::vector<char *>>
+Shell::tokenize_cmds(const std::vector<std::string> &args) {
+  std::vector<std::vector<char *>> cmds;
   std::vector<char *> c_args;
 
-  for (size_t i = 0; i < args.size(); ++i) {
-    const auto &arg = args[i];
-    c_args.push_back(const_cast<char *>(arg.c_str()));
-  }
-  if (!c_args.empty()) {
-    c_args.push_back(nullptr);
-  }
-
-  pid_t pid = fork();
-  if (pid < 0) {
-    perror("fork failed");
-    return;
+  for (std::string arg : args) {
+    if (arg == "|") {
+      c_args.push_back(nullptr);
+      cmds.push_back(c_args);
+      c_args.clear();
+      continue;
+    }
+    const auto &a = arg;
+    c_args.push_back(const_cast<char *>(a.c_str()));
   }
 
-  if (pid == 0) {
-
-    execvp(c_args[0], c_args.data());
-    perror("execvp failed");
-    exit(1);
-  } else {
-    int status;
-    waitpid(pid, &status, 0);
-  }
+  return cmds;
 }
